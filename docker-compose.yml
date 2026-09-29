@@ -1,0 +1,51 @@
+services:
+  mysql-db:
+    image: mysql:8.0
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: test_db
+    volumes:
+      - mysql_data:/var/lib/mysql          # volume persistant
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - devops-net
+
+  backend:
+    build: ./backend
+    image: ${DOCKERHUB_USER:-ihebbns}/benyounesiheb-5erp-bi1-gestionprojets-backend:${IMAGE_TAG:-latest}
+    container_name: backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/test_db?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "8089:8080"                         # 8080 est déjà pris par Jenkins dans la VM
+    depends_on:
+      mysql-db:
+        condition: service_healthy          # démarre après la base de données
+    restart: on-failure
+    networks:
+      - devops-net
+
+  frontend:
+    build: ./frontend
+    image: ${DOCKERHUB_USER:-ihebbns}/benyounesiheb-5erp-bi1-gestionprojets-frontend:${IMAGE_TAG:-latest}
+    container_name: frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend                             # démarre après le backend
+    networks:
+      - devops-net
+
+volumes:
+  mysql_data:
+
+networks:
+  devops-net:                               # réseau Docker dédié
+    driver: bridge
